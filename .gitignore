@@ -1,0 +1,9 @@
+logs
+raw_datasets
+datasets
+scripts
+src/__pycache__
+src/data/__pycache__
+src/losses/__pycache__
+src/utils/__pycache__
+backup_stores
