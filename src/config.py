@@ -5,11 +5,17 @@ from types import SimpleNamespace
 _BASE = dict(
     data_root="datasets",
     output_dir="experiments",
-    seed=1234, 
+    seed=1234,
     num_workers=4, # previously was 8 here
     deterministic=True,
-    save_every=50,     
-    val_every=10,       
+    arch="unet", # model architecture: 'unet' (baseline) or 'amfssnet'
+    # AMF-SSNet module switches (turned on one at a time across Phase 4)
+    use_wavelet=True,
+    use_mamba=False,
+    use_fusion=False,
+    use_proto=False,
+    save_every=50,  
+    val_every=10,     
 )
 
 """
@@ -81,7 +87,6 @@ DATASET_CONFIGS = {
 
 
 def get_config(dataset):
-    # Return a SimpleNamespace config for the chosen dataset
     dataset = dataset.lower()
     if dataset not in DATASET_CONFIGS:
         raise ValueError(f"Unknown dataset '{dataset}'. "
