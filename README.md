@@ -2,7 +2,7 @@
 
 Medical image segmentation model built on top of the U-Net and compared with EW-ViT baseline, with few improvements.
 
-**Current stage: Phase 4 — Wavelet Decomposition**
+**Current stage: Phase 4 - Wavelet Decomposition**
 
 For full dataset details see [DATASETS.md](DATASETS.md).
 
@@ -39,9 +39,9 @@ python test.py --dataset acdc --arch amfssnet --ckpt experiments/acdc_amfssnet_w
 
 ## Metrics
 
-- **DSC** — overlap between prediction and ground truth. Higher is better.
-- **HD95** — boundary error in pixels (95th-percentile Hausdorff). Lower is better.
-- **IoU** — intersection over union. Higher is better (ISIC only).
+- **DSC** - overlap between prediction and ground truth. Higher is better.
+- **HD95** - boundary error in pixels (95th-percentile Hausdorff). Lower is better.
+- **IoU** - intersection over union. Higher is better (ISIC only).
 
 All computed per class and averaged, matching the EW-ViT evaluation protocol.
 
@@ -53,7 +53,7 @@ The key change from a plain U-Net is replacing MaxPool downsampling with an **Ad
 
 ### Why Not MaxPool?
 
-MaxPool keeps only the largest value in each 2×2 region, throwing away ~75% of the information. Edges and textures — critical for organ/lesion boundaries — are lost.
+MaxPool keeps only the largest value in each 2×2 region, throwing away ~75% of the information. Edges and textures - critical for organ/lesion boundaries - are lost.
 
 ### What a Wavelet Does
 
@@ -101,7 +101,7 @@ model = AMFSSNet(in_channels=1, num_classes=9, use_wavelet=True)   # WaveletDown
 model = AMFSSNet(in_channels=1, num_classes=9, use_wavelet=False)  # MaxPool (control)
 ```
 
-Setting `use_wavelet=False` falls back to plain MaxPool using the same training code — clean internal ablation.
+Setting `use_wavelet=False` falls back to plain MaxPool using the same training code - clean internal ablation.
 
 ---
 
@@ -113,7 +113,7 @@ Setting `use_wavelet=False` falls back to plain MaxPool using the same training 
 |-------|--------|---------|--------|----------|-----------|
 | U-Net baseline | 85.74 | 86.32 | 91.88 | 87.98 | 1.76 |
 | + Wavelet (ours) | 86.86 | 86.56 | 92.13 | **88.52** | 1.92 |
-| EW-ViT (target) | — | — | — | 92.12 | **1.18** |
+| EW-ViT (target) | - | - | - | 92.12 | **1.18** |
 
 ### Synapse (Abdominal CT)
 
@@ -121,7 +121,7 @@ Setting `use_wavelet=False` falls back to plain MaxPool using the same training 
 |-------|-------|----|----|----|-------|----------|--------|---------|----------|-----------|
 | U-Net baseline | 87.84 | 55.86 | 82.51 | 77.06 | 94.86 | 61.55 | 86.85 | 76.18 | 77.84 | 46.16 |
 | + Wavelet (ours) | 89.27 | 56.74 | 82.94 | 71.41 | 94.58 | 56.47 | 87.53 | 76.45 | 76.92 | **37.40** |
-| EW-ViT (target) | — | — | — | — | — | — | — | — | **82.38** | **14.28** |
+| EW-ViT (target) | - | - | - | - | - | - | - | - | **82.38** | **14.28** |
 
 ### ISIC 2018 (Skin Lesion)
 
@@ -129,6 +129,6 @@ Setting `use_wavelet=False` falls back to plain MaxPool using the same training 
 |-------|------|-----|
 | U-Net baseline | 87.24 | 79.45 |
 | + Wavelet (ours) | **87.41** | **79.81** |
-| EW-ViT (target) | 88.07 | — |
+| EW-ViT (target) | 88.07 | - |
 
 > GB = Gallbladder, KL = Left Kidney, KR = Right Kidney. All numbers are on the held-out test set.
