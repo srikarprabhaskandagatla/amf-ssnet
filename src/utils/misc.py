@@ -1,5 +1,3 @@
-# Helpers: reproducible seeding, logging, checkpointing, metric averaging
-
 import os
 import sys
 import random
