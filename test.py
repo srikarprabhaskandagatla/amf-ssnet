@@ -2,8 +2,9 @@
 Evaluate a trained checkpoint and print per-class DSC and HD95.
 
 Usage:
-    python test.py --dataset acdc    --ckpt experiments/acdc_unet_baseline/best.pth
-    python test.py --dataset synapse --ckpt experiments/synapse_unet_baseline/best.pth
+    python test.py --dataset acdc --arch amfssnet \
+        --use_wavelet 1 --use_mamba 0 --use_fusion 0 --use_proto 0 \
+        --ckpt experiments/acdc_amfssnet_wavelet/best.pth
 """
 
 import os
@@ -14,7 +15,7 @@ from torch.utils.data import DataLoader
 
 from src.config import get_config
 from src.utils.misc import get_logger
-from src.models.unet import build_model
+from src.models import build_model
 from src.data.dataset_synapse import SynapseDataset
 from src.data.dataset_acdc import ACDCDataset
 from src.data.dataset_isic import ISICDataset
@@ -37,9 +38,20 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--dataset", required=True, choices=["synapse", "acdc", "isic"])
     ap.add_argument("--ckpt", required=True)
+    ap.add_argument("--arch", type=str, default=None, choices=["unet", "amfssnet"])
+    ap.add_argument("--use_wavelet", type=int, default=None)
+    ap.add_argument("--use_mamba", type=int, default=None)
+    ap.add_argument("--use_fusion", type=int, default=None)
+    ap.add_argument("--use_proto", type=int, default=None)
     args = ap.parse_args()
 
     cfg = get_config(args.dataset)
+    if args.arch is not None:
+        cfg.arch = args.arch
+    for k in ["use_wavelet", "use_mamba", "use_fusion", "use_proto"]:
+        v = getattr(args, k)
+        if v is not None:
+            setattr(cfg, k, bool(v))
     device = "cuda" if torch.cuda.is_available() else "cpu"
     logger = get_logger("experiments", name=f"test_{cfg.dataset}")
 
