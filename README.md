@@ -132,3 +132,21 @@ Setting `use_wavelet=False` falls back to plain MaxPool using the same training 
 | EW-ViT (target) | 88.07 | - |
 
 > GB = Gallbladder, KL = Left Kidney, KR = Right Kidney. All numbers are on the held-out test set.
+
+## Configuration
+
+All hyperparameters are in `src/config.py`. Each dataset has its own block. Key settings:
+
+- **Synapse** - SGD, lr 0.05, 400 epochs, batch 24, Dice+CE loss
+- **ACDC** - Adam, lr 1e-4, 150 epochs, batch 12, Dice+CE loss, patients 1–70 train / 71–80 val / 81–100 test
+- **ISIC** - Adam, lr 1e-4, 100 epochs, batch 16, Dice+BCE loss
+
+---
+
+## Datasets
+
+Datasets follow the same preprocessing as [TransUNet](https://github.com/Beckschen/TransUNet), sourced from the [Swin-Unet](https://github.com/HuCaoFighting/Swin-Unet) repository.
+
+- **Synapse/BTCV** - [Google Drive](https://drive.google.com/drive/folders/1ACJEoTp-uqfFJ73qS3eUObQh52nGuzCd)
+- **ACDC** - [Google Drive](https://drive.google.com/drive/folders/1KQcrci7aKsYZi1hQoZ3T3QUtcy7b--n4)
+- **ISIC 2018** - [ISIC Archive](https://challenge.isic-archive.com/data/#2018)
