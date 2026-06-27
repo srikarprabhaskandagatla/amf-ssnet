@@ -18,7 +18,7 @@ from torchvision import transforms
 from src.config import get_config
 from src.utils.misc import set_seed, get_logger, AverageMeter, save_checkpoint, count_params
 from src.losses.losses import build_loss
-from src.models.unet import build_model
+from src.models import build_model
 
 from src.data.transforms import RandomGenerator
 from src.data.dataset_synapse import SynapseDataset
@@ -83,32 +83,47 @@ def validate(cfg, model, val_loader, device):
                                  device=device, z_spacing=cfg.z_spacing)
         case_dice = sum(d for d, h in res) / len(res)
         all_dice.append(case_dice)
-    return sum(all_dice) / len(all_dice) # mean Dice over the validation set
+    return sum(all_dice) / len(all_dice)
 
 
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--dataset", required=True, choices=["synapse", "acdc", "isic"])
+    ap.add_argument("--arch", type=str, default=None, choices=["unet", "amfssnet"])
+    ap.add_argument("--use_wavelet", type=int, default=None, help="1/0 toggle")
+    ap.add_argument("--use_mamba", type=int, default=None, help="1/0 toggle")
+    ap.add_argument("--use_fusion", type=int, default=None, help="1/0 toggle")
+    ap.add_argument("--use_proto", type=int, default=None, help="1/0 toggle")
     ap.add_argument("--batch_size", type=int, default=None)
     ap.add_argument("--base_lr", type=float, default=None)
     ap.add_argument("--max_epochs", type=int, default=None)
     ap.add_argument("--img_size", type=int, default=None)
     ap.add_argument("--output_dir", type=str, default=None)
     ap.add_argument("--num_workers", type=int, default=None)
+    ap.add_argument("--tag", type=str, default=None, help="extra suffix for the run folder")
     ap.add_argument("--smoke_test", action="store_true",
                     help="Run 1 epoch on a tiny subset to verify the pipeline.")
     args = ap.parse_args()
 
     cfg = get_config(args.dataset)
-    
+
     # apply CLI overrides
-    for k in ["batch_size", "base_lr", "max_epochs", "img_size", "output_dir", "num_workers"]:
+    for k in ["arch", "batch_size", "base_lr", "max_epochs", "img_size",
+              "output_dir", "num_workers"]:
         v = getattr(args, k)
         if v is not None:
             setattr(cfg, k, v)
+            
+    # boolean module toggles
+    for k in ["use_wavelet", "use_mamba", "use_fusion", "use_proto"]:
+        v = getattr(args, k)
+        if v is not None:
+            setattr(cfg, k, bool(v))
 
-    exp_dir = os.path.join(cfg.output_dir if hasattr(cfg, "output_dir") else "experiments",
-                           f"{cfg.dataset}_unet_baseline")
+    run_name = f"{cfg.dataset}_{cfg.arch}"
+    if args.tag:
+        run_name += f"_{args.tag}"
+    exp_dir = os.path.join(getattr(cfg, "output_dir", "experiments"), run_name)
     os.makedirs(exp_dir, exist_ok=True)
     logger = get_logger(exp_dir)
     set_seed(cfg.seed, cfg.deterministic)
@@ -178,7 +193,7 @@ def main():
 
     logger.info(f"Training done. Best val Dice: {best_dice:.4f}")
     if args.smoke_test:
-        logger.info("SMOKE TEST PASSED - pipeline works end to end.")
+        logger.info("SMOKE TEST PASSED — pipeline works end to end.")
 
 
 if __name__ == "__main__":
