@@ -1,12 +1,3 @@
-"""
-Evaluation metrics matching the baseline paper: Dice (DSC) and 95% Hausdorff
-Distance (HD95), computed per organ/class and averaged.
-
-The key function is `test_single_volume`, which segments a 3D volume slice by
-slice (2D model) and reports per-class DSC/HD95, exactly the TransUNet/EW-ViT
-evaluation protocol.
-"""
-
 import numpy as np
 import torch
 import torch.nn.functional as F
@@ -14,7 +5,7 @@ from scipy.ndimage import zoom
 from medpy import metric
 
 
-def calculate_metric_per_case(pred, gt): # Dice + HD95 for one binary mask pair
+def calculate_metric_per_case(pred, gt):
     pred = pred.astype(bool)
     gt = gt.astype(bool)
     if pred.sum() > 0 and gt.sum() > 0:
@@ -22,14 +13,18 @@ def calculate_metric_per_case(pred, gt): # Dice + HD95 for one binary mask pair
         hd95 = metric.binary.hd95(pred, gt)
         return dice, hd95
     elif pred.sum() == 0 and gt.sum() == 0:
-        return 1.0, 0.0 # both empty which is perfect
+        return 1.0, 0.0          # both empty -> perfect
     else:
-        return 0.0, 0.0 # one empty which is worst (dice 0)
+        return 0.0, 0.0          # one empty -> worst (dice 0)
 
 
 @torch.no_grad()
 def test_single_volume(image, label, model, num_classes, patch_size,
                        device="cuda", z_spacing=1):
+    """
+    image, label : torch tensors (D, H, W) for one 3D volume.
+    Returns list of (dice, hd95) per foreground class.
+    """
     model.eval()
     image = image.squeeze().cpu().numpy()
     label = label.squeeze().cpu().numpy()
@@ -40,22 +35,23 @@ def test_single_volume(image, label, model, num_classes, patch_size,
     if image.ndim == 3:
         for d in range(image.shape[0]):
             slice_2d = image[d]
-            h, w = slice_2d.shape 
-            
+            h, w = slice_2d.shape
+
+            # resize slice to model input size
             if (h, w) != tuple(patch_size):
-                # resize slice to model input size
-                slice_2d = zoom(slice_2d, (patch_size[0] / h, patch_size[1] / w), order=3) 
+                slice_2d = zoom(slice_2d, (patch_size[0] / h, patch_size[1] / w), order=3)
             inp = torch.from_numpy(slice_2d).unsqueeze(0).unsqueeze(0).float().to(device)
             logits = model(inp)
             out = torch.argmax(torch.softmax(logits, dim=1), dim=1).squeeze(0)
-            out = out.cpu().numpy() 
-            
+            out = out.cpu().numpy()
+
+            # resize prediction back to original slice size
             if (h, w) != tuple(patch_size):
-                # resize prediction back to original slice size
                 out = zoom(out, (h / patch_size[0], w / patch_size[1]), order=0)
             prediction[d] = out
     else:
-        h, w = image.shape # single 2D image
+        # single 2D image (e.g. ISIC)
+        h, w = image.shape
         slice_2d = image
         if (h, w) != tuple(patch_size):
             slice_2d = zoom(slice_2d, (patch_size[0] / h, patch_size[1] / w), order=3)
@@ -74,7 +70,6 @@ def test_single_volume(image, label, model, num_classes, patch_size,
 
 @torch.no_grad()
 def evaluate_isic(model, loader, device="cuda"):
-    # Binary Dice/IoU for ISIC (single 2D images)
     model.eval()
     dices, ious = [], []
     for batch in loader:
