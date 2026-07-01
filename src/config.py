@@ -14,6 +14,7 @@ _BASE = dict(
     use_mamba=False,
     use_fusion=False,
     use_proto=False,
+    mamba_freq=True,         \
     save_every=50,  
     val_every=10,     
 )
