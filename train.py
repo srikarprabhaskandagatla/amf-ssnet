@@ -94,6 +94,8 @@ def main():
     ap.add_argument("--use_mamba", type=int, default=None, help="1/0 toggle")
     ap.add_argument("--use_fusion", type=int, default=None, help="1/0 toggle")
     ap.add_argument("--use_proto", type=int, default=None, help="1/0 toggle")
+    ap.add_argument("--mamba_freq", type=int, default=None,
+                    help="1/0: include frequency branch in Mamba unit (default 1)")
     ap.add_argument("--batch_size", type=int, default=None)
     ap.add_argument("--base_lr", type=float, default=None)
     ap.add_argument("--max_epochs", type=int, default=None)
@@ -101,6 +103,8 @@ def main():
     ap.add_argument("--output_dir", type=str, default=None)
     ap.add_argument("--num_workers", type=int, default=None)
     ap.add_argument("--tag", type=str, default=None, help="extra suffix for the run folder")
+    ap.add_argument("--resume", type=str, default=None,
+                    help="Path to a checkpoint (.pth) to resume training from.")
     ap.add_argument("--smoke_test", action="store_true",
                     help="Run 1 epoch on a tiny subset to verify the pipeline.")
     args = ap.parse_args()
@@ -115,7 +119,7 @@ def main():
             setattr(cfg, k, v)
             
     # boolean module toggles
-    for k in ["use_wavelet", "use_mamba", "use_fusion", "use_proto"]:
+    for k in ["use_wavelet", "use_mamba", "use_fusion", "use_proto", "mamba_freq"]:
         v = getattr(args, k)
         if v is not None:
             setattr(cfg, k, bool(v))
@@ -144,9 +148,19 @@ def main():
 
     max_epochs = 1 if args.smoke_test else cfg.max_epochs
     best_dice = 0.0
+    start_epoch = 0
     n_iter = 0
 
-    for epoch in range(max_epochs):
+    if args.resume:
+        ckpt = torch.load(args.resume, map_location=device)
+        model.load_state_dict(ckpt["model"])
+        start_epoch = ckpt.get("epoch", 0) + 1
+        best_dice = ckpt.get("dice", 0.0)
+        # restore n_iter so poly-LR schedule is consistent with epoch
+        n_iter = start_epoch * len(train_loader)
+        logger.info(f"Resumed from {args.resume} — epoch {start_epoch}, best_dice so far {best_dice:.4f}")
+
+    for epoch in range(start_epoch, max_epochs):
         model.train()
         loss_meter = AverageMeter()
         t0 = time.time()

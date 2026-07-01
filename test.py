@@ -43,12 +43,14 @@ def main():
     ap.add_argument("--use_mamba", type=int, default=None)
     ap.add_argument("--use_fusion", type=int, default=None)
     ap.add_argument("--use_proto", type=int, default=None)
+    ap.add_argument("--mamba_freq", type=int, default=None,
+                    help="1/0: include frequency branch in Mamba unit (must match training flags)")
     args = ap.parse_args()
 
     cfg = get_config(args.dataset)
     if args.arch is not None:
         cfg.arch = args.arch
-    for k in ["use_wavelet", "use_mamba", "use_fusion", "use_proto"]:
+    for k in ["use_wavelet", "use_mamba", "use_fusion", "use_proto", "mamba_freq"]:
         v = getattr(args, k)
         if v is not None:
             setattr(cfg, k, bool(v))
