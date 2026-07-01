@@ -1,15 +1,10 @@
-"""
-Module 1 - AMF-SSNet is implemented in this model, 
-
-When use_wavelet=False the model reduces to the plain U-Net, which lets us run a
-clean internal control with the exact same training code.
-"""
-
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
 from .wavelet import WaveletDown, WAVELET_SET
+from .mamba_block import DualDomainMamba
+
 
 class DoubleConv(nn.Module):
     def __init__(self, in_ch, out_ch):
@@ -25,7 +20,7 @@ class DoubleConv(nn.Module):
         return self.block(x)
 
 
-class MaxPoolDown(nn.Module): # Plain downsample (used when use_wavelet=False)
+class MaxPoolDown(nn.Module):
     def __init__(self, in_ch, out_ch):
         super().__init__()
         self.net = nn.Sequential(nn.MaxPool2d(2), DoubleConv(in_ch, out_ch))
@@ -52,12 +47,16 @@ class AMFSSNet(nn.Module):
     def __init__(self, in_channels=1, num_classes=9, base=64,
                  wavelets=WAVELET_SET,
                  use_wavelet=True, use_mamba=False,
-                 use_fusion=False, use_proto=False):
+                 use_fusion=False, use_proto=False,
+                 mamba_stages=(3, 4), mamba_freq=True):
         super().__init__()
         self.use_wavelet = use_wavelet
         self.use_mamba = use_mamba
         self.use_fusion = use_fusion
         self.use_proto = use_proto
+        self.mamba_freq = bool(mamba_freq)
+        # which deep stages get a Mamba unit (only meaningful when use_mamba)
+        self.mamba_stages = tuple(mamba_stages) if use_mamba else ()
 
         Down = (lambda i, o: WaveletDown(i, o, wavelets)) if use_wavelet else MaxPoolDown
 
@@ -66,6 +65,16 @@ class AMFSSNet(nn.Module):
         self.down2 = Down(base * 2, base * 4)
         self.down3 = Down(base * 4, base * 8)
         self.down4 = Down(base * 8, base * 8)
+
+        # Mamba branches at the two deepest stages (created ONLY when use_mamba,
+        # so use_mamba=False keeps the exact Module-1 parameter set).
+        if use_mamba:
+            self.mamba3 = (DualDomainMamba(base * 8, use_freq=self.mamba_freq,
+                                           use_fusion=use_fusion)
+                           if 3 in self.mamba_stages else None)
+            self.mamba4 = (DualDomainMamba(base * 8, use_freq=self.mamba_freq,
+                                           use_fusion=use_fusion)
+                           if 4 in self.mamba_stages else None)
 
         self.up1 = Up(base * 8 + base * 8, base * 4)
         self.up2 = Up(base * 4 + base * 4, base * 2)
@@ -80,7 +89,11 @@ class AMFSSNet(nn.Module):
         x2, w = self.down1(x1); wavelet_weights.append(w)
         x3, w = self.down2(x2); wavelet_weights.append(w)
         x4, w = self.down3(x3); wavelet_weights.append(w)
+        if self.use_mamba and self.mamba3 is not None:
+            x4 = self.mamba3(x4)                 # stage-3 dual-domain Mamba (28x28)
         x5, w = self.down4(x4); wavelet_weights.append(w)
+        if self.use_mamba and self.mamba4 is not None:
+            x5 = self.mamba4(x5)                 # bottleneck dual-domain Mamba (14x14)
 
         x = self.up1(x5, x4)
         x = self.up2(x, x3)
@@ -101,13 +114,17 @@ def build_amfssnet(cfg):
         use_mamba=getattr(cfg, "use_mamba", False),
         use_fusion=getattr(cfg, "use_fusion", False),
         use_proto=getattr(cfg, "use_proto", False),
+        mamba_stages=getattr(cfg, "mamba_stages", (3, 4)),
+        mamba_freq=getattr(cfg, "mamba_freq", True),
     )
 
 
 if __name__ == "__main__":
-    for uw in [False, True]:
-        m = AMFSSNet(1, 4, use_wavelet=uw)
-        x = torch.randn(2, 1, 224, 224)
-        y = m(x)
-        n = sum(p.numel() for p in m.parameters())
-        print(f"use_wavelet={uw}: out={tuple(y.shape)} params={n/1e6:.2f}M")
+    for um in [False, True]:
+        for mf in ([False, True] if um else [True]):
+            m = AMFSSNet(1, 4, use_wavelet=True, use_mamba=um, mamba_freq=mf)
+            x = torch.randn(2, 1, 224, 224)
+            y = m(x)
+            n = sum(p.numel() for p in m.parameters())
+            tag = f"use_mamba={um}" + (f" mamba_freq={mf}" if um else "")
+            print(f"{tag}: out={tuple(y.shape)} params={n/1e6:.2f}M")
