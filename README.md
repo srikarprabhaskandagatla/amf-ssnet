@@ -2,7 +2,7 @@
 
 Medical image segmentation model built on top of the U-Net and compared with EW-ViT baseline, with few improvements.
 
-**Current stage: Phase 4 - Wavelet Decomposition**
+**Current stage: Phase 4 - Modules 1-3 done (Wavelet + Mamba + Cross-Domain Fusion), Module 4 (Frequency Prototypes) next**
 
 For full dataset details see [DATASETS.md](DATASETS.md).
 
@@ -107,12 +107,19 @@ Setting `use_wavelet=False` falls back to plain MaxPool using the same training 
 
 ## Results
 
+Ablation legend: **+Wavelet** = Module 1, **+Mamba** = Module 1+2 (dual-domain
+Mamba, spatial + frequency branches), **+Fusion** = Module 1+2+3 (cross-domain
+coupling of the spatial/frequency branches). Module 4 (frequency prototypes) is
+not yet trained.
+
 ### ACDC (Cardiac MRI)
 
 | Model | RV DSC | Myo DSC | LV DSC | Mean DSC | Mean HD95 |
 |-------|--------|---------|--------|----------|-----------|
 | U-Net baseline | 85.74 | 86.32 | 91.88 | 87.98 | 1.76 |
-| + Wavelet (ours) | 86.86 | 86.56 | 92.13 | **88.52** | 1.92 |
+| + Wavelet | 86.86 | 86.56 | 92.13 | 88.52 | 1.92 |
+| + Mamba | 85.58 | 86.37 | 91.31 | 87.75 | 2.52 |
+| + Fusion (ours, best) | 88.60 | 86.41 | 91.21 | **88.74** | 2.06 |
 | EW-ViT (target) | - | - | - | 92.12 | **1.18** |
 
 ### Synapse (Abdominal CT)
@@ -120,7 +127,9 @@ Setting `use_wavelet=False` falls back to plain MaxPool using the same training 
 | Model | Aorta | GB | KL | KR | Liver | Pancreas | Spleen | Stomach | Mean DSC | Mean HD95 |
 |-------|-------|----|----|----|-------|----------|--------|---------|----------|-----------|
 | U-Net baseline | 87.84 | 55.86 | 82.51 | 77.06 | 94.86 | 61.55 | 86.85 | 76.18 | 77.84 | 46.16 |
-| + Wavelet (ours) | 89.27 | 56.74 | 82.94 | 71.41 | 94.58 | 56.47 | 87.53 | 76.45 | 76.92 | **37.40** |
+| + Wavelet | 89.27 | 56.74 | 82.94 | 71.41 | 94.58 | 56.47 | 87.53 | 76.45 | 76.92 | 37.40 |
+| + Mamba | 88.36 | 51.57 | 84.77 | 75.88 | 95.00 | 55.48 | 86.95 | 78.27 | 77.03 | 28.69 |
+| + Fusion (ours, best) | 89.60 | 56.07 | 82.91 | 75.80 | 94.46 | 57.15 | 91.14 | 77.06 | **78.02** | 29.66 |
 | EW-ViT (target) | - | - | - | - | - | - | - | - | **82.38** | **14.28** |
 
 ### ISIC 2018 (Skin Lesion)
@@ -128,10 +137,15 @@ Setting `use_wavelet=False` falls back to plain MaxPool using the same training 
 | Model | Dice | IoU |
 |-------|------|-----|
 | U-Net baseline | 87.24 | 79.45 |
-| + Wavelet (ours) | **87.41** | **79.81** |
+| + Wavelet | 87.41 | 79.81 |
+| + Mamba (ours, best) | **87.88** | **80.44** |
+| + Fusion | 86.46 | 78.63 |
 | EW-ViT (target) | 88.07 | - |
 
-> GB = Gallbladder, KL = Left Kidney, KR = Right Kidney. All numbers are on the held-out test set.
+> GB = Gallbladder, KL = Left Kidney, KR = Right Kidney. All numbers are on the
+> held-out test set. Fusion helps ACDC/Synapse but hurts ISIC, so the current
+> best-per-dataset model uses `use_fusion=1` for ACDC/Synapse and
+> `use_fusion=0` (Mamba row) for ISIC.
 
 ## Configuration
 
