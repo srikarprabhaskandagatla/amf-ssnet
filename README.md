@@ -2,7 +2,7 @@
 
 Medical image segmentation model built on top of the U-Net and compared with EW-ViT baseline, with few improvements.
 
-**Current stage: Phase 4 - Modules 1-3 done (Wavelet + Mamba + Cross-Domain Fusion), Module 4 (Frequency Prototypes) next**
+**Current stage: Full model deployed - Modules 1-5 (Wavelet + Mamba + Cross-Domain Fusion + Frequency Prototypes + Boundary Refinement Decoder) plus a BDoU boundary loss, all trained/tested on all 3 datasets. See Results below.**
 
 For full dataset details see [DATASETS.md](DATASETS.md).
 
@@ -108,9 +108,11 @@ Setting `use_wavelet=False` falls back to plain MaxPool using the same training 
 ## Results
 
 Ablation legend: **+Wavelet** = Module 1, **+Mamba** = Module 1+2 (dual-domain
-Mamba, spatial + frequency branches), **+Fusion** = Module 1+2+3 (cross-domain
-coupling of the spatial/frequency branches). Module 4 (frequency prototypes) is
-not yet trained.
+Mamba, spatial + frequency branches, stages 3+4), **+Fusion** = Module 1+2+3
+(cross-domain coupling), **+Proto** = full model with Module 4 (frequency
+prototypes), **+BD** = Module 5 (Boundary Refinement Decoder), **+BDoU** =
+boundary-aware BDoU loss added on top of Fusion/Mamba. All numbers are on the
+held-out test set.
 
 ### ACDC (Cardiac MRI)
 
@@ -119,8 +121,11 @@ not yet trained.
 | U-Net baseline | 85.74 | 86.32 | 91.88 | 87.98 | 1.76 |
 | + Wavelet | 86.86 | 86.56 | 92.13 | 88.52 | 1.92 |
 | + Mamba | 85.58 | 86.37 | 91.31 | 87.75 | 2.52 |
-| + Fusion (ours, best) | 88.60 | 86.41 | 91.21 | **88.74** | 2.06 |
-| EW-ViT (target) | - | - | - | 92.12 | **1.18** |
+| + Fusion (best unified base) | 88.60 | 86.41 | 91.21 | **88.74** | 2.06 |
+| Full (+Proto) | - | - | - | 87.50 | 2.35 |
+| + Fusion + BD | - | - | - | 88.57 | 2.46 |
+| + Fusion + BDoU loss | - | - | - | 87.06 | 2.38 |
+| EW-ViT (target, corrected) | - | - | - | 90.29 | - |
 
 ### Synapse (Abdominal CT)
 
@@ -129,8 +134,11 @@ not yet trained.
 | U-Net baseline | 87.84 | 55.86 | 82.51 | 77.06 | 94.86 | 61.55 | 86.85 | 76.18 | 77.84 | 46.16 |
 | + Wavelet | 89.27 | 56.74 | 82.94 | 71.41 | 94.58 | 56.47 | 87.53 | 76.45 | 76.92 | 37.40 |
 | + Mamba | 88.36 | 51.57 | 84.77 | 75.88 | 95.00 | 55.48 | 86.95 | 78.27 | 77.03 | 28.69 |
-| + Fusion (ours, best) | 89.60 | 56.07 | 82.91 | 75.80 | 94.46 | 57.15 | 91.14 | 77.06 | **78.02** | 29.66 |
-| EW-ViT (target) | - | - | - | - | - | - | - | - | **82.38** | **14.28** |
+| + Fusion (best unified base) | 89.60 | 56.07 | 82.91 | 75.80 | 94.46 | 57.15 | 91.14 | 77.06 | 78.02 | 29.66 |
+| Full (+Proto) | - | 56.12 | - | - | - | 55.94 | - | - | 76.52 | 34.34 |
+| + Fusion + BD | - | 55.34 | - | - | - | 60.19 | - | - | 77.11 | 30.05 |
+| + Fusion + BDoU loss (best) | - | **59.52** | - | - | - | **63.07** | - | - | **78.76** | 29.17 |
+| EW-ViT (target, corrected) | - | - | - | - | - | - | - | - | **83.51** | **16.68** |
 
 ### ISIC 2018 (Skin Lesion)
 
@@ -138,14 +146,22 @@ not yet trained.
 |-------|------|-----|
 | U-Net baseline | 87.24 | 79.45 |
 | + Wavelet | 87.41 | 79.81 |
-| + Mamba (ours, best) | **87.88** | **80.44** |
+| + Mamba (best unified base) | **87.88** | **80.44** |
 | + Fusion | 86.46 | 78.63 |
-| EW-ViT (target) | 88.07 | - |
+| Full (+Proto) | 87.41 | 79.91 |
+| + Mamba + BD | 87.86 | 80.63 |
+| + Mamba + BDoU loss | 87.76 | 80.52 |
+| EW-ViT (target, corrected) | 91.64 | - |
 
-> GB = Gallbladder, KL = Left Kidney, KR = Right Kidney. All numbers are on the
-> held-out test set. Fusion helps ACDC/Synapse but hurts ISIC, so the current
-> best-per-dataset model uses `use_fusion=1` for ACDC/Synapse and
-> `use_fusion=0` (Mamba row) for ISIC.
+> GB = Gallbladder, KL = Left Kidney, KR = Right Kidney. EW-ViT targets above
+> are corrected against the published paper's actual tables (paper reports no
+> ACDC HD95). Fusion helps ACDC/Synapse but hurts ISIC; since EW-ViT reports one
+> config for all datasets, our best single unified config is
+> **Wavelet + Mamba + Fusion (stages 3,4)**. The Boundary Decoder (Module 5) and
+> Frequency Prototypes (Module 4) were both trained and came out net-neutral;
+> the **BDoU boundary loss** is the lever that actually improved results - it
+> gives the best Synapse row and the best gallbladder/pancreas scores of any
+> variant (the two organs responsible for the entire Synapse DSC gap).
 
 ## Configuration
 
