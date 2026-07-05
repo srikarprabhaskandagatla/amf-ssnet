@@ -2,9 +2,10 @@
 Evaluate a trained checkpoint and print per-class DSC and HD95.
 
 Usage:
-    python test.py --dataset acdc --arch amfssnet \
-        --use_wavelet 1 --use_mamba 0 --use_fusion 0 --use_proto 0 \
-        --ckpt experiments/acdc_amfssnet_wavelet/best.pth
+    python test.py --dataset "$DATASET" --arch amfssnet \
+        --use_wavelet 1 --use_mamba 1 --use_fusion "$USE_FUSION" --use_proto "$USE_PROTO" \
+        --use_boundary 1 --mamba_freq 1 --mamba_stages 2,3,4 \
+        --ckpt "$CKPT"
 """
 
 import os
@@ -43,17 +44,23 @@ def main():
     ap.add_argument("--use_mamba", type=int, default=None)
     ap.add_argument("--use_fusion", type=int, default=None)
     ap.add_argument("--use_proto", type=int, default=None)
+    ap.add_argument("--use_boundary", type=int, default=None)
     ap.add_argument("--mamba_freq", type=int, default=None,
                     help="1/0: include frequency branch in Mamba unit (must match training flags)")
+    ap.add_argument("--mamba_stages", type=str, default=None,
+                    help="comma-separated encoder stages with Mamba, e.g. '2,3,4' (must match training)")
     args = ap.parse_args()
 
     cfg = get_config(args.dataset)
     if args.arch is not None:
         cfg.arch = args.arch
-    for k in ["use_wavelet", "use_mamba", "use_fusion", "use_proto", "mamba_freq"]:
+    for k in ["use_wavelet", "use_mamba", "use_fusion", "use_proto",
+              "use_boundary", "mamba_freq"]:
         v = getattr(args, k)
         if v is not None:
             setattr(cfg, k, bool(v))
+    if args.mamba_stages is not None:
+        cfg.mamba_stages = tuple(int(s) for s in args.mamba_stages.split(",") if s.strip())
     device = "cuda" if torch.cuda.is_available() else "cpu"
     logger = get_logger("experiments", name=f"test_{cfg.dataset}")
 

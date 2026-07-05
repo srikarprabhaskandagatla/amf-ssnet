@@ -4,6 +4,8 @@ import torch.nn.functional as F
 
 from .wavelet import WaveletDown, WAVELET_SET
 from .mamba_block import DualDomainMamba
+from .prototype import FrequencyPrototypeHead
+from .boundary import BoundaryDecoder
 
 
 class DoubleConv(nn.Module):
@@ -47,13 +49,15 @@ class AMFSSNet(nn.Module):
     def __init__(self, in_channels=1, num_classes=9, base=64,
                  wavelets=WAVELET_SET,
                  use_wavelet=True, use_mamba=False,
-                 use_fusion=False, use_proto=False,
-                 mamba_stages=(3, 4), mamba_freq=True):
+                 use_fusion=False, use_proto=False, use_boundary=False,
+                 mamba_stages=(3, 4), mamba_freq=True,
+                 proto_dim=128, proto_tau=0.1):
         super().__init__()
         self.use_wavelet = use_wavelet
         self.use_mamba = use_mamba
         self.use_fusion = use_fusion
         self.use_proto = use_proto
+        self.use_boundary = use_boundary
         self.mamba_freq = bool(mamba_freq)
         # which deep stages get a Mamba unit (only meaningful when use_mamba)
         self.mamba_stages = tuple(mamba_stages) if use_mamba else ()
@@ -66,15 +70,12 @@ class AMFSSNet(nn.Module):
         self.down3 = Down(base * 4, base * 8)
         self.down4 = Down(base * 8, base * 8)
 
-        # Mamba branches at the two deepest stages (created ONLY when use_mamba,
-        # so use_mamba=False keeps the exact Module-1 parameter set).
-        if use_mamba:
-            self.mamba3 = (DualDomainMamba(base * 8, use_freq=self.mamba_freq,
-                                           use_fusion=use_fusion)
-                           if 3 in self.mamba_stages else None)
-            self.mamba4 = (DualDomainMamba(base * 8, use_freq=self.mamba_freq,
-                                           use_fusion=use_fusion)
-                           if 4 in self.mamba_stages else None)
+        stage_channels = {1: base * 2, 2: base * 4, 3: base * 8, 4: base * 8}
+        for s in (1, 2, 3, 4):
+            built = (DualDomainMamba(stage_channels[s], use_freq=self.mamba_freq,
+                                     use_fusion=use_fusion)
+                     if (use_mamba and s in self.mamba_stages) else None)
+            setattr(self, f"mamba{s}", built)
 
         self.up1 = Up(base * 8 + base * 8, base * 4)
         self.up2 = Up(base * 4 + base * 4, base * 2)
@@ -82,27 +83,52 @@ class AMFSSNet(nn.Module):
         self.up4 = Up(base + base, base)
         self.outc = nn.Conv2d(base, num_classes, 1)
 
+        self.proto_head = (FrequencyPrototypeHead(base * 4, num_classes,
+                                                  dim=proto_dim, tau=proto_tau)
+                           if use_proto else None)
+
+        self.boundary = (BoundaryDecoder({"up3": base, "up4": base},
+                                         stages=("up3", "up4"))
+                         if use_boundary else None)
+
     def forward(self, x, return_aux=False):
         wavelet_weights = []
 
         x1 = self.inc(x)
         x2, w = self.down1(x1); wavelet_weights.append(w)
+        if self.mamba1 is not None:
+            x2 = self.mamba1(x2)
         x3, w = self.down2(x2); wavelet_weights.append(w)
+        if self.mamba2 is not None:
+            x3 = self.mamba2(x3)
         x4, w = self.down3(x3); wavelet_weights.append(w)
-        if self.use_mamba and self.mamba3 is not None:
-            x4 = self.mamba3(x4)                 # stage-3 dual-domain Mamba (28x28)
+        if self.mamba3 is not None:
+            x4 = self.mamba3(x4)
         x5, w = self.down4(x4); wavelet_weights.append(w)
-        if self.use_mamba and self.mamba4 is not None:
-            x5 = self.mamba4(x5)                 # bottleneck dual-domain Mamba (14x14)
+        if self.mamba4 is not None:
+            x5 = self.mamba4(x5)
 
         x = self.up1(x5, x4)
         x = self.up2(x, x3)
         x = self.up3(x, x2)
+        if self.boundary is not None:
+            x = self.boundary("up3", x)
         x = self.up4(x, x1)
+        if self.boundary is not None:
+            x = self.boundary("up4", x)
         logits = self.outc(x)
 
         if return_aux:
-            return logits, {"wavelet_weights": wavelet_weights}
+            aux = {"wavelet_weights": wavelet_weights}
+            if self.use_proto and self.proto_head is not None:
+                # Module 4: frequency prototypes on the 56x56 wavelet stage-3 feature
+                # (x3). proto_seg is the deep-supervised cosine-similarity class map;
+                # it is a training-only side branch (never the returned prediction).
+                proto_seg, proto_embed = self.proto_head(x3)
+                aux["proto_seg"] = proto_seg
+                aux["proto_embed"] = proto_embed
+                aux["prototypes"] = self.proto_head.prototypes
+            return logits, aux
         return logits
 
 
@@ -114,8 +140,11 @@ def build_amfssnet(cfg):
         use_mamba=getattr(cfg, "use_mamba", False),
         use_fusion=getattr(cfg, "use_fusion", False),
         use_proto=getattr(cfg, "use_proto", False),
+        use_boundary=getattr(cfg, "use_boundary", False),
         mamba_stages=getattr(cfg, "mamba_stages", (3, 4)),
         mamba_freq=getattr(cfg, "mamba_freq", True),
+        proto_dim=getattr(cfg, "proto_dim", 128),
+        proto_tau=getattr(cfg, "proto_tau", 0.1),
     )
 
 

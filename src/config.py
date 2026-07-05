@@ -14,9 +14,24 @@ _BASE = dict(
     use_mamba=False,
     use_fusion=False,
     use_proto=False,
-    mamba_freq=True,         \
-    save_every=50,  
-    val_every=10,     
+    use_boundary=False,
+    mamba_freq=True,
+    mamba_stages=(3, 4),
+    # Module 4 - Frequency Prototype Learning (reworked; only used when use_proto=True).
+    # Prototypes act as a cosine-similarity segmentation head on the 56x56 wavelet
+    # stage-3 feature (x3), DEEP-SUPERVISED with a class-balanced Dice+CE. See
+    # src/models/prototype.py + PrototypeSegLoss in src/losses/losses.py.
+    proto_dim=128,          
+    proto_tau=0.1,           
+    proto_sep_weight=1.0,    
+    proto_sep_margin=-0.2,   
+    proto_weight=0.1,        
+    proto_warmup_epochs=10,  
+                             
+    boundary_weight=0.0,     
+    boundary_alpha_cap=0.8,  
+    save_every=50,
+    val_every=10,
 )
 
 """
