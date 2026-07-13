@@ -15,4 +15,7 @@ def build_model(cfg):
         return UNet(in_channels=cfg.in_channels, num_classes=cfg.num_classes)
     if arch == "amfssnet":
         return build_amfssnet(cfg)
-    raise ValueError(f"Unknown arch '{arch}'. Choose 'unet' or 'amfssnet'.")
+    if arch == "amfssnet_vm":
+        from .amfssnet_vm import build_amfssnet_vm
+        return build_amfssnet_vm(cfg)
+    raise ValueError(f"Unknown arch '{arch}'. Choose 'unet', 'amfssnet', 'amfssnet_vm'.")

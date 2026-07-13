@@ -17,6 +17,21 @@ _BASE = dict(
     use_boundary=False,
     mamba_freq=True,
     mamba_stages=(3, 4),
+    # VMamba-encoder variant (arch='amfssnet_vm')
+    freq_stages=(2, 3, 4),
+    use_mamba_dec=False,
+    vmamba_ckpt=None,
+    drop_path_rate=0.2,
+    backbone_lr_mult=1.0,
+    warmup_epochs=0,
+    # compound small-organ loss (additive, 0 = off)
+    tversky_weight=0.0,
+    tversky_alpha=0.3,
+    tversky_beta=0.7,
+    focal_weight=0.0,
+    focal_gamma=2.0,
+    small_organ_classes=(),
+    small_organ_weight=2.0,
     # Module 4 - Frequency Prototype Learning (reworked; only used when use_proto=True).
     # Prototypes act as a cosine-similarity segmentation head on the 56x56 wavelet
     # stage-3 feature (x3), DEEP-SUPERVISED with a class-balanced Dice+CE. See
@@ -25,11 +40,26 @@ _BASE = dict(
     proto_tau=0.1,           
     proto_sep_weight=1.0,    
     proto_sep_margin=-0.2,   
-    proto_weight=0.1,        
-    proto_warmup_epochs=10,  
-                             
-    boundary_weight=0.0,     
-    boundary_alpha_cap=0.8,  
+    proto_weight=0.1,
+    proto_warmup_epochs=10,
+
+    boundary_weight=0.0,
+    boundary_alpha_cap=0.8,
+    # Boundary-aware prototype (center+boundary sub-prototypes, 2026-style).
+    # Only active when use_proto=True; adds an align term on top of PrototypeSegLoss.
+    proto_boundary=False,
+    proto_align_weight=1.0,
+    proto_cons_weight=0.5,
+    proto_cons_tau=0.5,
+    # Signed-distance-function boundary head (FocusSDF-style, 2025).
+    use_sdf=False,
+    sdf_weight=0.1,
+    sdf_sigma=0.1,
+    sdf_reg_weight=1.0,
+    sdf_focus_weight=1.0,
+    sdf_max_dist=16,
+    use_ds=False,
+    ds_weight=0.4,
     save_every=50,
     val_every=10,
 )

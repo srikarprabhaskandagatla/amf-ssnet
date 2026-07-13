@@ -33,6 +33,32 @@ class FrequencyPrototypeHead(nn.Module):
         return seg, e
 
 
+class BoundaryAwarePrototypeHead(nn.Module):
+    def __init__(self, in_ch, num_classes, dim=128, tau=0.1):
+        super().__init__()
+        self.num_classes = num_classes
+        self.dim = dim
+        self.tau = tau
+        self.proj = nn.Sequential(
+            nn.Conv2d(in_ch, dim, 1, bias=False),
+            nn.BatchNorm2d(dim),
+        )
+        self.centers = nn.Parameter(torch.randn(num_classes, dim))
+        self.boundaries = nn.Parameter(torch.randn(num_classes, dim))
+
+    def embed(self, feat):
+        return F.normalize(self.proj(feat), dim=1)
+
+    def forward(self, feat):
+        e = self.embed(feat)
+        C = F.normalize(self.centers, dim=1)
+        Bn = F.normalize(self.boundaries, dim=1)
+        sc = torch.einsum("bdhw,kd->bkhw", e, C) / self.tau
+        sb = torch.einsum("bdhw,kd->bkhw", e, Bn) / self.tau
+        seg = torch.maximum(sc, sb)
+        return seg, e
+
+
 if __name__ == "__main__":
     head = FrequencyPrototypeHead(256, 9, dim=128)   # x3 = base*4 = 256 ch, 56x56
     x = torch.randn(2, 256, 56, 56)

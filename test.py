@@ -39,7 +39,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--dataset", required=True, choices=["synapse", "acdc", "isic"])
     ap.add_argument("--ckpt", required=True)
-    ap.add_argument("--arch", type=str, default=None, choices=["unet", "amfssnet"])
+    ap.add_argument("--arch", type=str, default=None, choices=["unet", "amfssnet", "amfssnet_vm"])
     ap.add_argument("--use_wavelet", type=int, default=None)
     ap.add_argument("--use_mamba", type=int, default=None)
     ap.add_argument("--use_fusion", type=int, default=None)
@@ -49,18 +49,37 @@ def main():
                     help="1/0: include frequency branch in Mamba unit (must match training flags)")
     ap.add_argument("--mamba_stages", type=str, default=None,
                     help="comma-separated encoder stages with Mamba, e.g. '2,3,4' (must match training)")
+    ap.add_argument("--freq_stages", type=str, default=None,
+                    help="amfssnet_vm: comma-separated FrequencyMamba stages (must match training)")
+    ap.add_argument("--use_mamba_dec", type=int, default=None, help="amfssnet_vm: 1/0 (must match training)")
+    ap.add_argument("--vmamba_size", type=str, default=None,
+                    choices=["tiny", "small", "base"],
+                    help="amfssnet_vm: VMamba encoder size (MUST match training)")
+    ap.add_argument("--proto_boundary", type=int, default=None,
+                    help="amfssnet_vm: 1/0 (must match training)")
+    ap.add_argument("--use_sdf", type=int, default=None,
+                    help="amfssnet_vm: 1/0 (must match training)")
+    ap.add_argument("--use_ds", type=int, default=None,
+                    help="amfssnet_vm: 1/0 deep-supervision heads (must match training)")
+    ap.add_argument("--tta", type=int, default=0, help="1/0: flip test-time augmentation")
+    ap.add_argument("--postproc", type=int, default=0, help="1/0: largest-connected-component post-processing")
     args = ap.parse_args()
 
     cfg = get_config(args.dataset)
     if args.arch is not None:
         cfg.arch = args.arch
     for k in ["use_wavelet", "use_mamba", "use_fusion", "use_proto",
-              "use_boundary", "mamba_freq"]:
+              "use_boundary", "mamba_freq", "use_mamba_dec",
+              "proto_boundary", "use_sdf", "use_ds"]:
         v = getattr(args, k)
         if v is not None:
             setattr(cfg, k, bool(v))
     if args.mamba_stages is not None:
         cfg.mamba_stages = tuple(int(s) for s in args.mamba_stages.split(",") if s.strip())
+    if args.freq_stages is not None:
+        cfg.freq_stages = tuple(int(s) for s in args.freq_stages.split(",") if s.strip())
+    if args.vmamba_size is not None:
+        cfg.vmamba_size = args.vmamba_size
     device = "cuda" if torch.cuda.is_available() else "cpu"
     logger = get_logger("experiments", name=f"test_{cfg.dataset}")
 
@@ -72,8 +91,12 @@ def main():
 
     loader = build_test_loader(cfg)
 
+    tta = bool(args.tta)
+    postproc = bool(args.postproc)
+    logger.info(f"Inference: tta={tta} postproc={postproc}")
+
     if cfg.dataset == "isic":
-        dice, iou = evaluate_isic(model, loader, device)
+        dice, iou = evaluate_isic(model, loader, device, tta=tta, postproc=postproc)
         logger.info(f"ISIC Test  ->  Dice: {dice:.4f}   IoU: {iou:.4f}")
         return
 
@@ -88,7 +111,8 @@ def main():
         image = batch["image"][0]
         label = batch["label"][0]
         res = test_single_volume(image, label, model, cfg.num_classes, patch,
-                                 device=device, z_spacing=cfg.z_spacing)
+                                 device=device, z_spacing=cfg.z_spacing,
+                                 tta=tta, postproc=postproc)
         for c, (d, h) in enumerate(res):
             dsc[c] += d
             hd[c] += h
